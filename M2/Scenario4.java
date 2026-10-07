@@ -38,19 +38,19 @@ public class Scenario4 extends BaseClass {
         // Step 3: Add code to solve the problem (add/commit as needed)
         /*
          * aia47 10/5/2026
-         * grab current phase by index i
+         * grab current string by index i
          * remove every character that is not a letter digit or space (replaceAll)
          * trim string of leading and trailing spaces
          * collapse multiple spaces into one
          * convert whole string into lowercase
-         * split phrase into words by 1 space
+         * split string into words by 1 space
          * uppercase each starting character on each word
          * join words back together
-         * assign the result to placheholder for phrase
+         * assign the result to placheholder for string
          * use placeholder and get length
-         * if length too short print phrase "Not eanough characters"
-         * find the middle index of the phrase and take up to 3 characters starting
-         * there. For shorter phrases, exclude the first and last character before
+         * if length too short print string "Not eanough characters"
+         * find the middle index of the string and take up to 3 characters starting
+         * there. For shorter string, exclude the first and last character before
          * picking the middle.
          * assign result to placeholder characters
          * make sure they both get assigned on every loop to prevent carry over
@@ -61,10 +61,10 @@ public class Scenario4 extends BaseClass {
         for (int i = 0; i < arr.length; i++) {
             // Start Solution Edits
             String sentence = arr[i];
-            sentence = sentence.replaceAll("[^a-zA-Z0-9]", "");
+            sentence = sentence.replaceAll("[^a-zA-Z0-9 ]", "");
             sentence = sentence.trim().replaceAll(" +", "");
             sentence = sentence.toLowerCase();
-            String[] words = sentence.split("");
+            String[] words = sentence.split(" ");
             String tCased = "";
             for (int j = 0; j < words.length; j++) {
                 if (words[j].length() > 0) {
