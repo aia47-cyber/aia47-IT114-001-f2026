@@ -1,0 +1,93 @@
+package M3;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Scanner;
+
+/*
+Challenge 3: Mad Libs Generator (Randomized Stories)
+-----------------------------------------------------
+- Load a **random** story from the "stories" folder
+- Extract **each line** into a collection (i.e., ArrayList)
+- Prompts user for each placeholder (i.e., <adjective>) 
+    - Any word the user types is acceptable, no need to verify if it matches the placeholder type
+    - Any placeholder with underscores should display with spaces instead
+- Replace placeholders with user input (assign back to original slot in collection)
+*/
+/*
+aia47 10/14/2026
+get the list of files in the stories folder and pick one at random (use random import?)
+open file and red line by line
+store each line in a list
+loop through every slot in lines
+in each line matching < >symbols 
+turn underscores into spaces then prompt user for input (scanner) then make use that there is no remaing placeholders
+when done store into same slot with index and replace original line
+*/
+
+public class MadLibsGenerator extends BaseClass {
+    private static final String STORIES_FOLDER = "M3/stories";
+    private static String ucid = "aia47"; // <-- change to your ucid
+
+    public static void main(String[] args) {
+        printHeader(ucid, 3,
+                "Objective: Implement a Mad Libs generator that replaces placeholders dynamically.");
+
+        Scanner scanner = new Scanner(System.in);
+        File folder = new File(STORIES_FOLDER);
+
+        if (!folder.exists() || !folder.isDirectory() || folder.listFiles().length == 0) {
+            System.out.println("Error: No stories found in the 'stories' folder.");
+            printFooter(ucid, 3);
+            scanner.close();
+            return;
+        }
+        List<String> lines = new ArrayList<>();
+        // Start edits
+
+        File[] files = folder.listFiles();
+        File Chosen = files[(int) (Math.random() * files.length)];
+
+        try (Scanner filescanner = new Scanner(Chosen)) {
+            while (filescanner.hasNextLine()) {
+                lines.add(filescanner.nextLine());
+            }
+        } catch (Exception e) {
+            System.out.println("Error reading file");
+            scanner.close();
+            return;
+        }
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            int searchfrom = 0;
+            while (true) {
+                int start = line.indexOf("<", searchfrom);
+                if (start == -1) {
+                    break;
+                }
+                int end = line.indexOf(">", start);
+                if (end == -1) {
+                    break;
+                }
+                String placeholder = line.substring(start + 1, end).replace("_", " ");
+                System.out.print("Enter a " + placeholder + ": ");
+                String input = scanner.nextLine();
+                line = line.substring(0, start) + input + line.substring(end + 1);
+                searchfrom = start + input.length();
+            }
+            lines.set(i, line);
+        }
+
+        // End edits
+        System.out.println("\nYour Completed Mad Libs Story:\n");
+        StringBuilder finalStory = new StringBuilder();
+        for (String line : lines) {
+            finalStory.append(line).append("\n");
+        }
+        System.out.println(finalStory.toString());
+
+        printFooter(ucid, 3);
+        scanner.close();
+    }
+}
