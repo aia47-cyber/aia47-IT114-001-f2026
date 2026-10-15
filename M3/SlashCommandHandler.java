@@ -13,11 +13,23 @@ Challenge 2: Simple Slash Command Handler
 - Print errors for invalid command formats (when applicable)
 - Capture 3 variations of each command except "/quit"
 */
+/*
+aia47 10/14/2026
+read whole line input from user (scan.nextLine() along with trim method)
+Split into two pieces and lowercase first half 
+check command using if statements
+implement /greet and /roll
+review implemenetation before moving on to next
+implement /echo and /quit
+anything else is not recongnized
+delete the sample block
+
+*/
 
 import java.util.Scanner;
 
 public class SlashCommandHandler extends BaseClass {
-    private static String ucid = "mt85"; // <-- change to your UCID
+    private static String ucid = "aia47"; // <-- change to your UCID
 
     public static void main(String[] args) {
         printHeader(ucid, 2, "Objective: Implement a simple slash command parser.");

@@ -15,10 +15,20 @@ Challenge 3: Mad Libs Generator (Randomized Stories)
     - Any placeholder with underscores should display with spaces instead
 - Replace placeholders with user input (assign back to original slot in collection)
 */
+/*
+aia47 10/14/2026
+get the list of files in the stories folder and pick one at random (use random import?)
+open file and red line by line
+store each line in a list
+loop through every slot in lines
+in each line matching < >symbols 
+turn underscores into spaces then prompt user for input (scanner) then make use that there is no remaing placeholders
+when done store into same slot with index and replace original line
+*/
 
 public class MadLibsGenerator extends BaseClass {
     private static final String STORIES_FOLDER = "M3/stories";
-    private static String ucid = "mt85"; // <-- change to your ucid
+    private static String ucid = "aia47"; // <-- change to your ucid
 
     public static void main(String[] args) {
         printHeader(ucid, 3,

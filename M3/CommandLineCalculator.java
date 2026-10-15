@@ -10,9 +10,17 @@ Challenge 1: Command-Line Calculator
 - Display an error for invalid inputs or unsupported operators
 - Capture 5 variations of tests
 */
-
+/*
+aia47 10/14/2026
+Grab the user input using scanner, separate input into two arrays one for operator and one for values
+Check if number is valid and if operator is valid
+Check if number is decimal and if so pick the largest of two decimal values
+Use switch case for operator 
+Display result with mathcing number type of input
+Run 5 initial tests
+*/
 public class CommandLineCalculator extends BaseClass {
-    private static String ucid = "mt85"; // <-- change to your ucid
+    private static String ucid = "aia47"; // <-- change to your ucid
 
     public static void main(String[] args) {
         printHeader(ucid, 1, "Objective: Implement a calculator using command-line arguments.");
@@ -25,17 +33,42 @@ public class CommandLineCalculator extends BaseClass {
 
         try {
             System.out.println("Calculating result...");
-            // extract the equation (format is <num1> <operator> <num2>)
 
-            // check if operator is addition or subtraction
+            String numText = args[0];
+            String operator = args[1];
+            String numText2 = args[2];
+            double num1 = Double.parseDouble(numText);
+            double num2 = Double.parseDouble(numText2);
+            int decimals1 = 0;
+            int decimals2 = 0;
 
-            // check the type of each number and choose appropriate parsing
-
-            // generate the equation result (Important: ensure decimals display as the
-            // longest decimal passed)
-            // i.e., 0.1 + 0.2 would show as one decimal place (0.3), 0.11 + 0.2 would shows
-            // as two (0.31), etc
-
+            if (numText.contains(".")) {
+                decimals1 = numText.length() - numText.indexOf(".") - 1;
+            }
+            if (numText2.contains(".")) {
+                decimals2 = numText2.length() - numText2.indexOf(".") - 1;
+            }
+            int places = decimals1;
+            if (decimals2 > decimals1) {
+                places = decimals2;
+            }
+            double result = 0;
+            switch (operator) {
+                case "+":
+                    result = num1 + num2;
+                    break;
+                case "-":
+                    result = num1 - num2;
+                    break;
+                default:
+                    System.out.println("Error: Unsupported Operator");
+                    break;
+            }
+            if (places == 0) {
+                System.out.println("Result" + (int) result);
+            } else {
+                System.out.println("Result" + String.format("%." + places + "f", result));
+            }
         } catch (Exception e) {
             System.out.println("Invalid input. Please ensure correct format and valid numbers.");
         }
