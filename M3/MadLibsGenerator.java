@@ -46,16 +46,38 @@ public class MadLibsGenerator extends BaseClass {
         List<String> lines = new ArrayList<>();
         // Start edits
 
-        // load a random story file
+        File[] files = folder.listFiles();
+        File Chosen = files[(int) (Math.random() * files.length)];
 
-        // parse the story lines
-
-        // iterate through the lines
-
-        // prompt the user for each placeholder (note: there may be more than one
-        // placeholder in a line)
-
-        // apply the update to the same collection slot
+        try (Scanner filescanner = new Scanner(Chosen)) {
+            while (filescanner.hasNextLine()) {
+                lines.add(filescanner.nextLine());
+            }
+        } catch (Exception e) {
+            System.out.println("Error reading file");
+            scanner.close();
+            return;
+        }
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            int searchfrom = 0;
+            while (true) {
+                int start = line.indexOf("<", searchfrom);
+                if (start == -1) {
+                    break;
+                }
+                int end = line.indexOf(">", start);
+                if (end == -1) {
+                    break;
+                }
+                String placeholder = line.substring(start + 1, end).replace("_", " ");
+                System.out.print("Enter a " + placeholder + ": ");
+                String input = scanner.nextLine();
+                line = line.substring(0, start) + input + line.substring(end + 1);
+                searchfrom = start + input.length();
+            }
+            lines.set(i, line);
+        }
 
         // End edits
         System.out.println("\nYour Completed Mad Libs Story:\n");
