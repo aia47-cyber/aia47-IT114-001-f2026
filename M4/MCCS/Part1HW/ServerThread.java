@@ -1,3 +1,10 @@
+// UCID: aia47
+// Date: 2026-11-02
+/*
+flip: pick heads or tails and display result
+pm: find target client and send message only to them
+shuffle: mix message and display 
+*/
 package M4.MCCS.Part1HW;
 
 import java.io.IOException;
@@ -5,24 +12,33 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.Objects;
+import java.util.function.Consumer;
 
-import M4.MCCS.Part1.Constants;
+import M4.MCCS.Part1HW.TextFX;
+import M4.MCCS.Part1HW.TextFX.Color;
+import M4.MCCS.Part1HW.Constants;
 
-/** Owns one socket, its object streams, read loop, and resource cleanup. */
+/**
+ * Server-side handler for one connected client.
+ * Owns one socket, its object streams, read loop, and resource cleanup.
+ * Each client gets its own thread so multiple clients can be served
+ * concurrently.
+ */
 public class ServerThread extends Thread {
     private final Socket client;
-    private final long clientId = threadId();
+    private final long clientId = threadId(); // set before any logging so the id appears correctly
     private final Server server;
-    private final java.util.function.Consumer<ServerThread> onInitializationComplete;
-    private volatile ObjectOutputStream out;
-    private volatile boolean isRunning;
+    private final Consumer<ServerThread> onInitializationComplete;
+    private volatile ObjectOutputStream out; // field so sendToClient() can reach it after run() opens it
+    private volatile boolean isRunning; // volatile so changes are visible across threads immediately
 
     /** Keep the accepted socket and the server callback for this one client. */
     protected ServerThread(Socket client, Server server,
-            java.util.function.Consumer<ServerThread> onInitializationComplete) {
+            Consumer<ServerThread> onInitializationComplete) {
         this.client = Objects.requireNonNull(client, "Client socket is required");
         this.server = Objects.requireNonNull(server, "Server is required");
         this.onInitializationComplete = Objects.requireNonNull(onInitializationComplete, "Callback is required");
+        info("ServerThread created");
     }
 
     /** Report whether this connection has completed setup and remains active. */
@@ -57,29 +73,53 @@ public class ServerThread extends Thread {
         server.handleDisconnect(this);
     }
 
-    /** Interpret wire commands or delegate ordinary text to the server. */
-    private void processMessage(String message) {
-        if (message.startsWith(Constants.COMMAND_TRIGGER + ",")) {
-            String[] parts = message.split(",", 3);
-            switch (parts[1]) {
-                case "disconnect":
-                    server.handleDisconnect(this);
-                    return;
-                case "users":
-                    server.handleGetUserList(this);
-                    return;
-                case "reverse":
-                    server.handleReverseText(this, parts.length > 2 ? parts[2] : "");
-                    return;
-                default:
-                    break;
-            }
+    /**
+     * Routes incoming text to a command handler or broadcasts it as a chat message.
+     */
+    private void processPayload(String incoming) {
+        if (!processCommand(incoming)) {
+            server.handleMessage(this, incoming);
         }
-        server.handleMessage(this, message);
+    }
+
+    /**
+     * Interpret wire commands.
+     * Commands start with COMMAND_TRIGGER and are comma-separated:
+     * trigger,name,data
+     * Example: [cmd],reverse,hello world
+     *
+     * @return true if a command was handled, false if plain text
+     */
+    private boolean processCommand(String message) {
+        if (!message.startsWith(Constants.COMMAND_TRIGGER + ",")) {
+            return false;
+        }
+        String[] parts = message.split(",", 3);
+        if (parts.length < 2) {
+            return false;
+        }
+        final String command = parts[1].trim();
+        System.out.println(TextFX.colorize("Checking command: " + command, Color.YELLOW));
+        switch (command) {
+            case "disconnect":
+                server.handleDisconnect(this);
+                return true;
+            case "users":
+                server.handleGetUserList(this);
+                return true;
+            case "reverse":
+                server.handleReverseText(this, parts.length > 2 ? parts[2] : "");
+                return true;
+            default:
+                return false;
+        }
     }
 
     /**
      * Write a message; success reports a completed write, not a delivery receipt.
+     *
+     * @return true on success, false if the send failed (client likely
+     *         disconnected)
      */
     protected synchronized boolean sendToClient(String payload) {
         if (!isRunning || out == null || client.isClosed()) {
@@ -91,14 +131,26 @@ public class ServerThread extends Thread {
             out.reset(); // Release previously written objects from the stream's cache.
             return true;
         } catch (IOException e) {
-            info("Send failed: " + e.getMessage());
+            info("Send failed (most likely disconnected): " + e.getMessage());
             return false;
         }
     }
 
-    /** Close the classic socket to release blocked platform-thread I/O. */
+    /**
+     * Signals this thread to stop. Sets isRunning to false, interrupts the thread,
+     * and
+     * closes the classic socket to release blocked platform-thread I/O (interrupt
+     * alone
+     * does not unblock a socket read), so the run() loop exits and the finally
+     * block
+     * handles cleanup. Call from outside this thread (e.g. from Server).
+     */
     protected void disconnect() {
+        info("Thread being disconnected by server");
         isRunning = false;
+        if (Thread.currentThread() != this) {
+            this.interrupt(); // unblocks readObject() if the thread is waiting on it
+        }
         try {
             client.close();
         } catch (IOException e) {
@@ -112,7 +164,11 @@ public class ServerThread extends Thread {
      */
     @Override
     public void run() {
+        info("Thread starting");
         // Both endpoints send and flush their stream header before waiting for input.
+        // ObjectOutputStream must be opened before ObjectInputStream on both sides.
+        // Reversing the order causes a deadlock: both sides block waiting for the
+        // other's stream header.
         try (Socket connection = client) {
             connection.setSoTimeout(Constants.SETUP_TIMEOUT_MS);
             try (ObjectOutputStream output = new ObjectOutputStream(connection.getOutputStream())) {
@@ -121,12 +177,13 @@ public class ServerThread extends Thread {
                 try (ObjectInputStream input = new ObjectInputStream(connection.getInputStream())) {
                     connection.setSoTimeout(0);
                     isRunning = true;
-                    onInitialized();
+                    onInitialized(); // notify Server this thread is ready
                     while (isRunning) {
                         try {
-                            Object received = input.readObject();
+                            Object received = input.readObject(); // blocks until client sends something
                             if (received instanceof String message) {
-                                processMessage(message);
+                                info(TextFX.colorize("Received from client: " + message, Color.CYAN));
+                                processPayload(message);
                             } else {
                                 info("Ignoring an invalid payload");
                             }
@@ -137,16 +194,31 @@ public class ServerThread extends Thread {
                 }
             }
         } catch (IOException e) {
-            if (isRunning) {
+            if (Thread.currentThread().isInterrupted()) {
+                info("Thread interrupted during read, disconnect() was called");
+            } else if (isRunning) {
                 info("Connection ended: " + e.getMessage());
             } else {
                 info("Connection closed during setup or cleanup");
             }
         } finally {
-            disconnect();
+            isRunning = false;
+            info("Exited thread loop. Cleaning up connection");
+            cleanup();
             // Notify the server after this handler closes its connection.
             onDisconnected();
         }
     }
 
+    /** Close the socket and release this connection's resources. */
+    private void cleanup() {
+        info("ServerThread cleanup() start");
+        try {
+            client.close();
+            info("Closed server-side socket");
+        } catch (IOException e) {
+            info("Client already closed");
+        }
+        info("ServerThread cleanup() end");
+    }
 }

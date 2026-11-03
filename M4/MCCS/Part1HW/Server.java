@@ -1,3 +1,6 @@
+// UCID: aia47
+// Date: 2026-11-02
+// Plan: When a flip, pm or shuffle command comes in, just pass it to the Server.
 package M4.MCCS.Part1HW;
 
 import java.io.IOException;
@@ -11,6 +14,8 @@ import java.util.function.Function;
 /** Accepts connections and selects the recipients of each message. */
 public class Server {
 
+    private int port = 3000;
+    // thread-safe map; multiple ServerThreads may call Server methods concurrently
     private final ConcurrentHashMap<Long, ServerThread> connectedClients = new ConcurrentHashMap<>();
     private final List<ServerThread> disconnectedBuffer = new ArrayList<>();
     private volatile boolean isRunning = true;
@@ -23,12 +28,20 @@ public class Server {
 
     /** Accept connections and give each socket its own handler thread. */
     private void start(int port) {
+        this.port = port;
+        System.out.println("Listening on port " + this.port);
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             listener = serverSocket;
             System.out.println("Server listening on " + port);
             while (isRunning) {
-                Socket client = serverSocket.accept();
+                System.out.println("Waiting for next client");
+                Socket client = serverSocket.accept(); // blocks until a client connects
+                System.out.println("Client connected");
+                // third arg is a callback; ServerThread calls it once streams are open and it
+                // is ready
                 new ServerThread(client, this, this::onServerThreadInitialized).start();
+                // not added to connectedClients here; that happens inside the callback after
+                // setup
             }
         } catch (IOException e) {
             if (isRunning) {
@@ -36,6 +49,7 @@ public class Server {
             }
         } finally {
             shutdown();
+            System.out.println("Server socket closed");
         }
     }
 
@@ -59,7 +73,12 @@ public class Server {
         }
     }
 
-    /** Register a handler only after its object streams are ready. */
+    /**
+     * Callback from ServerThread once streams are open and it is ready to
+     * send/receive.
+     * Registers the client (only after its object streams are ready) and announces
+     * their arrival.
+     */
     private synchronized void onServerThreadInitialized(ServerThread client) {
         if (!client.isRunning()) {
             return;
@@ -76,13 +95,21 @@ public class Server {
         }
     }
 
-    /** Remove a disconnected client and send queued leave notices. */
+    // handle* methods are the interface ServerThread uses to trigger Server actions
+
+    /**
+     * Called when a client requests to disconnect. Removes the client and sends
+     * queued leave notices.
+     */
     protected synchronized void handleDisconnect(ServerThread client) {
         removeClient(client);
         processDisconnectedBuffer();
     }
 
-    /** Unicast the current ready-client list to the requester. */
+    /**
+     * Unicast the current ready-client list to the requester only.
+     * The requester's entry is tagged with "(you)".
+     */
     protected synchronized void handleGetUserList(ServerThread requester) {
         StringBuilder list = new StringBuilder("Connected users:\n");
         for (ServerThread client : connectedClients.values()) {
@@ -108,7 +135,10 @@ public class Server {
         broadcast(sender, new StringBuilder(text).reverse().toString());
     }
 
-    /** Label a message and send it to every ready handler. */
+    /**
+     * Label a message and send it to every ready handler. Any client whose send
+     * fails is removed.
+     */
     private void broadcast(ServerThread sender, String message) {
         String label = sender == null ? "Server" : sender.getDisplayName();
         String formatted = label + ": " + message;
@@ -142,7 +172,8 @@ public class Server {
 
     /** Validate the optional port argument and start the server. */
     public static void main(String[] args) {
-        int port = 3000;
+        System.out.println("Server Starting");
+        int port = 3000; // default port
         try {
             if (args.length > 0) {
                 port = Integer.parseInt(args[0]);
@@ -156,6 +187,7 @@ public class Server {
             return;
         }
         new Server().start(port);
+        System.out.println("Server Stopped");
     }
 
 }

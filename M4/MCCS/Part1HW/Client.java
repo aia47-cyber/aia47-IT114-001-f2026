@@ -1,3 +1,6 @@
+// UCID: aia47
+// Date: 2026-11-02
+// Plan: Add /flip, /pm and /shuffle as commands. When the user types one, send it to the server like /reverse does.
 package M4.MCCS.Part1HW;
 
 import java.io.IOException;
@@ -6,10 +9,15 @@ import java.io.ObjectOutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.Scanner;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-import M4.MCCS.Part1.Constants;
+import M4.MCCS.Part1HW.TextFX;
+import M4.MCCS.Part1HW.TextFX.Color;
+import M4.MCCS.Part1HW.Constants;
 
 /**
+ * Multi-client chat client using ObjectInputStream/ObjectOutputStream.
  * Terminal input stays on the main thread; one background thread receives
  * messages.
  */
@@ -17,8 +25,14 @@ public class Client {
 
     private volatile Socket server;
     private ObjectOutputStream out;
-    private boolean isRunning = true;
+    private volatile boolean isRunning = true; // volatile so changes are visible across threads immediately
+    final Pattern ipAddressPattern = Pattern
+            .compile("/connect\\s+(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}:\\d{3,5})");
+    final Pattern localhostPattern = Pattern.compile("/connect\\s+(localhost:\\d{3,5})");
 
+    /**
+     * Recognized client-side commands.
+     */
     private enum Command {
         CONNECT("/connect"), DISCONNECT("/disconnect"), QUIT("/quit"),
         USERS("/users"), REVERSE("/reverse");
@@ -41,9 +55,16 @@ public class Client {
         }
     }
 
+    public Client() {
+        System.out.println("Client Created");
+    }
+
     /** Check whether the current socket and output stream are available. */
     public synchronized boolean isConnected() {
-        return server != null && !server.isClosed() && out != null;
+        // Note: these check the client's end of the socket only; they don't detect
+        // server-side failures
+        return server != null && server.isConnected() && !server.isClosed()
+                && !server.isInputShutdown() && !server.isOutputShutdown() && out != null;
     }
 
     /** Open streams in header-safe order and start a background receiver. */
@@ -56,6 +77,8 @@ public class Client {
         try {
             candidate.connect(new InetSocketAddress(host, port), Constants.SETUP_TIMEOUT_MS);
             candidate.setSoTimeout(Constants.SETUP_TIMEOUT_MS);
+            // ObjectOutputStream must be created before ObjectInputStream on both sides to
+            // avoid deadlock
             ObjectOutputStream output = new ObjectOutputStream(candidate.getOutputStream());
             output.flush();
             ObjectInputStream input = new ObjectInputStream(candidate.getInputStream());
@@ -63,6 +86,7 @@ public class Client {
             server = candidate;
             out = output;
             new Thread(() -> listenToServer(candidate, input)).start();
+            System.out.println("Client connected");
             System.out.println("Connection opened");
             return true;
         } catch (IOException e) {
@@ -76,8 +100,18 @@ public class Client {
         }
     }
 
+    /** Check that a /connect command is shaped like localhost:port or ip:port. */
+    private boolean isConnection(String text) {
+        Matcher ipMatcher = ipAddressPattern.matcher(text);
+        Matcher localhostMatcher = localhostPattern.matcher(text);
+        return ipMatcher.matches() || localhostMatcher.matches();
+    }
+
     /**
      * Handle a recognized slash command and leave ordinary chat text to the caller.
+     *
+     * @return true if the input was a recognized command, false if it is a plain
+     *         message
      */
     private boolean processClientCommand(String text) throws IOException {
         String[] parts = text.strip().split("\\s+", 2);
@@ -88,17 +122,21 @@ public class Client {
         String arguments = parts.length == 2 ? parts[1] : "";
         switch (command) {
             case CONNECT:
+                if (!isConnection(text.strip().replaceAll("\\s+", " "))) {
+                    System.out.println("Invalid format. Use: /connect localhost:3000 or /connect 192.168.1.x:3000");
+                    return true;
+                }
                 String[] endpoint = arguments.split(":", -1);
                 if (endpoint.length != 2 || endpoint[0].isBlank()) {
                     System.out.println("Use /connect <host>:<port>");
                     return true;
                 }
                 try {
-                    int port = Integer.parseInt(endpoint[1]);
+                    int port = Integer.parseInt(endpoint[1].trim());
                     if (port < 1 || port > 65535) {
                         System.out.println("Port must be between 1 and 65535");
                     } else {
-                        connect(endpoint[0], port);
+                        connect(endpoint[0].trim(), port);
                     }
                 } catch (NumberFormatException e) {
                     System.out.println("Port must be a whole number");
@@ -116,6 +154,7 @@ public class Client {
             case QUIT:
                 isRunning = false;
                 closeServerConnection(server);
+                System.out.println("Client terminated");
                 return true;
             default:
                 return false;
@@ -143,7 +182,7 @@ public class Client {
     /** Write through the current connection while preventing interleaved sends. */
     private synchronized void sendToServer(String payload) throws IOException {
         if (!isConnected()) {
-            System.out.println("Not connected; use /connect <host>:<port>");
+            System.out.println("Not connected; use /connect <host>:<port> (hint: /connect localhost:3000)");
             return;
         }
         out.writeObject(payload);
@@ -151,15 +190,18 @@ public class Client {
         out.reset();
     }
 
-    /** Receive data for this socket until it closes or reading fails. */
+    /**
+     * Runs in a background thread. Receive data for this socket until it closes
+     * or reading fails.
+     */
     private void listenToServer(Socket connection, ObjectInputStream input) {
         try (input) {
-            while (!connection.isClosed()) {
-                Object received = input.readObject();
+            while (isRunning && !connection.isClosed()) {
+                Object received = input.readObject(); // blocking
                 if (received instanceof String message) {
                     synchronized (this) {
                         if (server == connection && !connection.isClosed()) {
-                            System.out.println(message);
+                            System.out.println(TextFX.colorize(message, Color.BLUE));
                         }
                     }
                 } else {
@@ -173,6 +215,7 @@ public class Client {
         } finally {
             // A finished old receiver cannot clear a subsequently opened connection.
             closeServerConnection(connection);
+            System.out.println("listenToServer thread stopped");
         }
     }
 
@@ -181,8 +224,18 @@ public class Client {
         if (connection == null) {
             return;
         }
+        if (server == connection && out != null) {
+            try {
+                System.out.println("Closing output stream");
+                out.close();
+            } catch (IOException e) {
+                System.out.println("Could not close output stream: " + e.getMessage());
+            }
+        }
         try {
+            System.out.println("Closing connection");
             connection.close();
+            System.out.println("Closed socket");
         } catch (IOException e) {
             System.out.println("Could not close connection: " + e.getMessage());
         }
@@ -197,7 +250,9 @@ public class Client {
      * Read keyboard input until quit or end-of-input, then close the connection.
      */
     public void start() {
+        System.out.println("Client starting");
         try (Scanner input = new Scanner(System.in)) {
+            System.out.println("Waiting for input");
             while (isRunning && input.hasNextLine()) {
                 try {
                     String text = input.nextLine();
@@ -211,6 +266,7 @@ public class Client {
             }
         } finally {
             closeServerConnection(server);
+            System.out.println("listenToInput thread stopped");
         }
     }
 
