@@ -35,7 +35,7 @@ public class Client {
      */
     private enum Command {
         CONNECT("/connect"), DISCONNECT("/disconnect"), QUIT("/quit"),
-        USERS("/users"), REVERSE("/reverse");
+        USERS("/users"), REVERSE("/reverse"), FLIP("/flip"), PM("/pm"), SHUFFLE("/shuffle");
 
         private final String trigger;
 
@@ -150,6 +150,24 @@ public class Client {
                 return true;
             case DISCONNECT:
                 sendDisconnect();
+                return true;
+            case FLIP:
+                sendToServer(Constants.COMMAND_TRIGGER + ",flip");
+                return true;
+            case PM:
+                String[] pmParts = arguments.split("\\s+", 2);
+                if (pmParts.length < 2 || pmParts[1].isBlank()) {
+                    System.out.println("Use /pm <target id> <message>");
+                } else {
+                    sendToServer(Constants.COMMAND_TRIGGER + ",pm," + arguments);
+                }
+                return true;
+            case SHUFFLE:
+                if (arguments.isBlank()) {
+                    System.out.println("Use /shuffle <message>");
+                } else {
+                    sendToServer(Constants.COMMAND_TRIGGER + ",shuffle," + arguments);
+                }
                 return true;
             case QUIT:
                 isRunning = false;

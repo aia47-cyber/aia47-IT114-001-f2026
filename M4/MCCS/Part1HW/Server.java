@@ -10,6 +10,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.concurrent.ThreadLocalRandom;
 
 /** Accepts connections and selects the recipients of each message. */
 public class Server {
@@ -135,6 +138,32 @@ public class Server {
         broadcast(sender, new StringBuilder(text).reverse().toString());
     }
 
+    protected synchronized void handlePrivateMessage(ServerThread sender, String data) {
+        String[] parts = data.trim().split("\\s+", 2);
+        if (parts.length < 2 || parts[1].isBlank()) {
+            sender.sendToClient("Server: Use /pm <target id> <message>");
+            return;
+        }
+        long targetId;
+        try {
+            targetId = Long.parseLong(parts[0]);
+        } catch (NumberFormatException e) {
+            sender.sendToClient("Server: Target id must be a number");
+            return;
+        }
+        ServerThread target = connectedClients.get(targetId);
+        if (target == null) {
+            sender.sendToClient("Server: No user with id " + targetId);
+            return;
+        }
+        String message = "PM from " + sender.getDisplayName() + ": " + parts[1];
+        sender.sendToClient(message);
+        if (target != sender && !target.sendToClient(message)) {
+            removeClient(target);
+            processDisconnectedBuffer();
+        }
+    }
+
     /**
      * Label a message and send it to every ready handler. Any client whose send
      * fails is removed.
@@ -152,6 +181,13 @@ public class Server {
                 removeClient(client);
             }
         }
+    }
+
+    protected synchronized void handleShuffle(ServerThread sender, String text) {
+        List<String> chars = new ArrayList<>(Arrays.asList(text.split("")));
+        Collections.shuffle(chars);
+        String shuffled = String.join("", chars);
+        broadcast(null, "Shuffled from " + sender.getDisplayName() + ": " + shuffled);
     }
 
     /** Complete a send pass before processing its disconnect notices. */

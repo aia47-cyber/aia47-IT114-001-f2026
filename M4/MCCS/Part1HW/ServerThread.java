@@ -110,6 +110,15 @@ public class ServerThread extends Thread {
             case "reverse":
                 server.handleReverseText(this, parts.length > 2 ? parts[2] : "");
                 return true;
+            case "pm":
+                server.handlePrivateMessage(this, parts.length > 2 ? parts[2] : "");
+                return true;
+            case "flip":
+                server.handleFlip(this);
+                return true;
+            case "shuffle":
+                server.handleShuffle(this, parts.length > 2 ? parts[2] : "");
+                return true;
             default:
                 return false;
         }
