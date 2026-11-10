@@ -48,6 +48,7 @@ public class ServerThread extends BaseServerThread {
     @Override
     protected void processPayload(Payload incoming) {
 
+        // aia47 11/05/2026 Sends each payload type to its handler.
         switch (incoming.getPayloadType()) {
             case CLIENT_CONNECT:
                 processClientConnect(incoming);
@@ -70,6 +71,7 @@ public class ServerThread extends BaseServerThread {
     // Start region for process*() methods ===================================
     private void processDisconnect(Payload incoming) {
         info("Processing disconnect payload");
+        // aia47 11/05/2026 Passes the disconnect request to the server.
         Server.INSTANCE.handleDisconnect(this);
     }
 
@@ -80,6 +82,7 @@ public class ServerThread extends BaseServerThread {
 
     private void processMessage(Payload incoming) {
         info("Processing message payload");
+        // aia47 11/05/2026 Passes the chat message to the server.
         Server.INSTANCE.handleMessage(this, incoming.getMessage());
     }
 
@@ -95,6 +98,7 @@ public class ServerThread extends BaseServerThread {
         }
         // TODO: could add validation for client name here (not blank, length limit,
         // profanity filter, etc)
+        // aia47 11/05/2026 Saves the client name which starts the initialization.
         setClientName(((ConnectionPayload) incoming).getClientName());
     }
     // End region for process*() methods ===================================
@@ -109,6 +113,7 @@ public class ServerThread extends BaseServerThread {
      */
     protected void sendDisconnectTrigger() {
         Payload payload = new Payload();
+        // aia47 11/05/2026 Sends a disconnect notice to the client.
         payload.setPayloadType(PayloadType.DISCONNECT);
         sendToClient(payload);
         disconnect();
@@ -121,6 +126,7 @@ public class ServerThread extends BaseServerThread {
      */
     protected boolean sendClientId() {
         ConnectionPayload payload = new ConnectionPayload();
+        // aia47 11/05/2026 Sends the assigned ID to the client.
         payload.setPayloadType(PayloadType.CLIENT_ID);
         payload.setClientId(getClientId());
         payload.setClientName(getClientName());
@@ -155,6 +161,7 @@ public class ServerThread extends BaseServerThread {
 
     protected boolean sendMessage(String message) {
         Payload payload = new Payload();
+        // aia47 11/05/2026 Sends a chat message to the client.
         payload.setPayloadType(PayloadType.MESSAGE);
         payload.setMessage(message);
         return sendToClient(payload);

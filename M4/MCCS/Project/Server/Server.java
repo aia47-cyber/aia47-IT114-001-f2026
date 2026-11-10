@@ -27,6 +27,7 @@ public enum Server {
     private int port = 3000;
     private ServerSocket serverSocket = null; // kept as field so shutdown() can close it
     // thread-safe map; multiple ServerThreads may call Server methods concurrently
+    // aia47 11/05/2026 Stores all connected clients by their ID.
     private final ConcurrentHashMap<Long, ServerThread> connectedClients = new ConcurrentHashMap<>();
     // ArrayList is sufficient; all access flows through synchronized methods
     private final List<ServerThread> disconnectedBuffer = new ArrayList<>();
@@ -51,6 +52,7 @@ public enum Server {
             // ConcurrentModificationException risk.
             // By closing the serverSocket first, no new clients can be added to
             // connectedClients during this iteration.
+            // aia47 11/05/2026 Disconnects every client when the server shuts down.
             connectedClients.values().forEach(serverThread -> serverThread.disconnect());
         } catch (Exception e) {
             e.printStackTrace();
@@ -67,15 +69,19 @@ public enum Server {
     private void start(int port) {
         this.port = port;
         info("Listening on port " + this.port);
+        // aia47 11/05/2026 Opens the server socket to listen on the port.
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             this.serverSocket = serverSocket; // store reference so shutdown() can close it
             while (isRunning) {
                 info("Waiting for next client");
+                // aia47 11/05/2026 Waits here until a client connects.
                 Socket incomingClient = serverSocket.accept(); // blocks until a client connects
                 info("Client connected");
                 // third arg is a callback; ServerThread calls it once streams are open and it
                 // is ready
+                // aia47 11/05/2026 Creates a ServerThread to handle the accepted client.
                 ServerThread serverThread = new ServerThread(incomingClient, this::onServerThreadInitialized);
+                // aia47 11/05/2026 Starts the thread so each client runs on its own.
                 serverThread.start();
                 // not added to connectedClients here; that happens inside the callback after
                 // setup
@@ -94,11 +100,14 @@ public enum Server {
      * Registers the client and announces their arrival.
      */
     private synchronized void onServerThreadInitialized(ServerThread serverThread) {
+        // aia47 11/05/2026 Assigns the next client ID.
         serverThread.setClientId(nextClientId++);// set then increase client id
         if (nextClientId < 0) { // handle overflow just in case
             nextClientId = 1;
         }
+        // aia47 11/05/2026 Sends the assigned ID back to the client.
         serverThread.sendClientId(); // send the assigned client ID back to the client
+        // aia47 11/05/2026 Adds the client to the connected clients map.
         connectedClients.put(serverThread.getClientId(), serverThread);
         unicastClientStatus(serverThread); // send existing users to new client first
         // Note: broadcastClientStatus includes the new client itself (they receive
@@ -122,9 +131,11 @@ public enum Server {
             // — avoid double-broadcast of the leave status
             return;
         }
+        // aia47 11/05/2026 Tells the client to disconnect.
         serverThread.sendDisconnectTrigger();
         LoggerUtil.INSTANCE
                 .info(TextFX.colorize("Client " + serverThread.getDisplayName() + " disconnected.", Color.RED));
+        // aia47 11/05/2026 Removes the client from the connected clients map.
         connectedClients.remove(serverThread.getClientId());
         broadcastClientStatus(serverThread, false, false);
     }
@@ -136,6 +147,7 @@ public enum Server {
      * Called when a client requests to disconnect. Delegates to disconnect().
      */
     protected synchronized void handleDisconnect(ServerThread sender) {
+        // aia47 11/05/2026 Handles a client request to disconnect.
         disconnect(sender);
     }
 
@@ -148,6 +160,7 @@ public enum Server {
 
     /** Broadcasts a chat message from the sender to all clients. */
     protected synchronized void handleMessage(ServerThread sender, String text) {
+        // aia47 11/05/2026 Sends the chat message to everyone.
         broadcast(sender, text);
     }
     // end region for handle*() methods ===================================
@@ -197,6 +210,7 @@ public enum Server {
     private synchronized void broadcast(ServerThread sender, String message) {
         String senderLabel = sender == null ? "Server" : String.format("%s", sender.getDisplayName());
         final String formatted = String.format("%s: %s", senderLabel, message);
+        // aia47 11/05/2026 Sends the message to each connected client.
         sendOrDisconnect(serverThread -> serverThread.sendMessage(formatted));
     }
     // end region for data broadcast ==============================

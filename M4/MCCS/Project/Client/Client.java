@@ -68,6 +68,7 @@ public enum Client {
      */
     private boolean connect(String address, int port) {
         try {
+            // aia47 11/05/2026 Opens the socket to the server.
             server = new Socket(address, port);
             // ObjectOutputStream must be created before ObjectInputStream on both sides to
             // avoid deadlock
@@ -104,6 +105,7 @@ public enum Client {
         switch (command) {
             case CONNECT:
                 if (isConnection(text)) {
+                    // aia47 11/05/2026 Requires a name before connecting.
                     String myClientName = myUser.getClientName();
                     if (myClientName == null || myClientName.isBlank()) {
                         LoggerUtil.INSTANCE
@@ -112,8 +114,11 @@ public enum Client {
                         return true;
                     }
                     // strip "/connect ", split host:port
+                    // aia47 11/05/2026 Reads the host and port from the connect command.
                     String[] parts = text.trim().replaceAll(" +", " ").split(" ")[1].split(":");
+                    // aia47 11/05/2026 Opens the connection to the server.
                     connect(parts[0].trim(), Integer.parseInt(parts[1].trim()));
+                    // aia47 11/05/2026 Sends the client name to the server.
                     sendConnectionData(myClientName); // send the desired name after connection request
                 } else {
                     LoggerUtil.INSTANCE
@@ -146,6 +151,7 @@ public enum Client {
                 if (name.isBlank()) {
                     LoggerUtil.INSTANCE.severe(TextFX.colorize("Name cannot be blank", Color.RED));
                 } else {
+                    // aia47 11/05/2026 Saves the name entered with /name.
                     myUser.setClientName(name);// temporarily hold client's desired name
                     // sendConnectionData() will trigger the server-side initialization flow
                     LoggerUtil.INSTANCE.info(
@@ -181,6 +187,7 @@ public enum Client {
      */
     private void sendDisconnect() throws IOException {
         Payload payload = new Payload();
+        // aia47 11/05/2026 Tells the server this client is disconnecting.
         payload.setPayloadType(PayloadType.DISCONNECT);
         sendToServer(payload);
     }
@@ -208,6 +215,7 @@ public enum Client {
      */
     private void sendMessage(String text) throws IOException {
         Payload payload = new Payload();
+        // aia47 11/05/2026 Sends a chat message to the server.
         payload.setPayloadType(PayloadType.MESSAGE);
         payload.setMessage(text);
         sendToServer(payload);
@@ -239,6 +247,7 @@ public enum Client {
         try {
             while (isRunning && isConnected()) {
                 try {
+                    // aia47 11/05/2026 Waits for messages from the server.
                     Payload fromServer = (Payload) in.readObject(); // blocking
                     if (fromServer != null) {
                         processPayload(fromServer);
@@ -292,6 +301,8 @@ public enum Client {
                 processReverse(payload);
                 break;
             case DISCONNECT: // server acknowledged this client's disconnect command; close connection
+                // aia47 11/05/2026 Closes the connection after the server confirms the
+                // disconnect.
                 LoggerUtil.INSTANCE.info("Server acknowledged disconnect. Closing connection.");
                 closeServerConnection();
                 break;
@@ -314,6 +325,7 @@ public enum Client {
      */
     private void processMessage(Payload payload) {
         // regular chat message from another client; just print it
+        // aia47 11/05/2026 Prints a chat message from another client.
         LoggerUtil.INSTANCE.info(TextFX.colorize(payload.getMessage(), Color.BLUE));
     }
 
@@ -375,10 +387,12 @@ public enum Client {
         long assignedId = payload.getClientId();
         String clientName = ((ConnectionPayload) payload).getClientName();
         // create my users
+        // aia47 11/05/2026 Saves the ID assigned by the server.
         myUser.setClientId(assignedId);
         myUser.setClientName(clientName);
         // add to known users cache
         knownUsers.put(assignedId, myUser);
+        // aia47 11/05/2026 Shows the connection confirmation.
         LoggerUtil.INSTANCE.info(TextFX.colorize("Connected", Color.GREEN));
     }
     // End region for process*() methods ===================================
@@ -391,7 +405,9 @@ public enum Client {
         try (Scanner si = new Scanner(System.in)) {
             LoggerUtil.INSTANCE.info("Waiting for input");
             while (isRunning) {
+                // aia47 11/05/2026 Reads what the user types.
                 String userInput = si.nextLine();
+                // aia47 11/05/2026 Sends the text as a chat message if it is not a command.
                 if (!processClientCommand(userInput)) {
                     sendMessage(userInput);
                 }
@@ -412,6 +428,7 @@ public enum Client {
     }
 
     private void closeServerConnection() {
+        // aia47 11/05/2026 Clears the saved users and resets this client.
         knownUsers.clear();
         myUser.reset();
         try {
@@ -433,6 +450,7 @@ public enum Client {
         try {
             if (server != null) {
                 LoggerUtil.INSTANCE.info("Closing connection");
+                // aia47 11/05/2026 Closes the socket so the client can reconnect later.
                 server.close();
                 LoggerUtil.INSTANCE.info("Closed socket");
             }
